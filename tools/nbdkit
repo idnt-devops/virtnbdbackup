@@ -49,6 +49,18 @@ def get_size(h):
 
 def pread(h, buf, offset, flags):
     # TODO
+    # direct match in blockmap:
+    #
+    #  list(filter(lambda x:x["originalOffset"]==0,blocks))
+    #
+    # get block where offset sort of matches
+    #  list(filter(lambda x:x["originalOffset"]<=65536,blocks))[-1]
+    #
+    # if offset+length < length, read available read data and return,
+    # if not position seek next block and read, repeat until all data read,
+    # return data:
+    #    list(filter(lambda x:x["nextBlockOffset"]==133300734,blocks))
+    #
     n = os.preadv(h['fd'], [buf], offset)
     if n != len(buf):
         raise RuntimeError("unexpected short read from file")

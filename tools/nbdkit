@@ -1,0 +1,54 @@
+#   nbdkit -f -v python ./nbdkit blockmap=blocks.json disk=vda.copy.data
+import os
+import builtins
+import nbdkit
+import json
+import pprint
+API_VERSION = 2
+
+map = None
+image = None
+
+def config(key, value):
+    global map
+    global image
+    if key == "blockmap":
+        map = json.loads(builtins.open(value,'r').read())
+        return
+    if key == "disk":
+        image = value
+        return
+
+    raise RuntimeError("unknown parameter: " + key)
+
+def config_complete():
+    global image
+    global map
+    if image is None or map is None:
+        raise RuntimeError("file and disk parameter is required")
+
+    pprint.pprint(map)
+
+def thread_model():
+    return nbdkit.THREAD_MODEL_PARALLEL
+
+def open(readonly):
+    if readonly:
+        flags = os.O_RDONLY
+    else:
+        flags = os.O_RDWR
+    fd = os.open(image, flags)
+    return {'fd': fd}
+
+def get_size(h):
+    global map
+    size = 0
+    for m in map:
+        size+=m['length']
+    return size
+
+def pread(h, buf, offset, flags):
+    # TODO
+    n = os.preadv(h['fd'], [buf], offset)
+    if n != len(buf):
+        raise RuntimeError("unexpected short read from file")

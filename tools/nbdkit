@@ -1,4 +1,4 @@
-#   nbdkit -f -v python ./nbdkit blockmap=blocks.json disk=vda.copy.data
+#   nbdkit -f -v python ./nbdkit blockmap=blocks.json disk=vda.copy.data -t 1
 import os
 import builtins
 import nbdkit
@@ -48,10 +48,9 @@ def get_size(h):
     return size
 
 def pread(h, buf, offset, flags):
+    global map
     # TODO
     # direct match in blockmap:
-    #
-    #  list(filter(lambda x:x["originalOffset"]==0,blocks))
     #
     # get block where offset sort of matches
     #  list(filter(lambda x:x["originalOffset"]<=65536,blocks))[-1]
@@ -61,6 +60,31 @@ def pread(h, buf, offset, flags):
     # return data:
     #    list(filter(lambda x:x["nextBlockOffset"]==133300734,blocks))
     #
-    n = os.preadv(h['fd'], [buf], offset)
+    blockList = list(filter(lambda x:x["originalOffset"]<=offset,map))
+    if len(blockList) == 1:
+        block = blockList[0]
+    else:
+        block = blockList[-1]
+
+    nbdkit.debug("%s" % block)
+
+    if block['nextBlockOffset'] is None:
+        # TODO
+        nbdkit.debug('READ FROM END OF FILE')
+
+    fileOffset = block['offset']+offset
+
+    dataRange = fileOffset+len(buf)
+    nbdkit.debug('SEEK TO: %s' % fileOffset)
+    nbdkit.debug('READ: %s' % len(buf))
+
+    if dataRange <= fileOffset+block['length']:
+        nbdkit.debug('can read everything')
+    else:
+        raise RuntimeError('need data from next block')
+
+    #os.lseek(h['fd'], fileOffset, os.SEEK_SET)
+    n = os.preadv(h['fd'], [buf], fileOffset)
+    nbdkit.debug("readed: %s" % n)
     if n != len(buf):
         raise RuntimeError("unexpected short read from file")

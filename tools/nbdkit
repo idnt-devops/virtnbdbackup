@@ -71,11 +71,10 @@ def pread(h, buf, offset, flags):
     if block['nextBlockOffset'] is None:
         # TODO
         nbdkit.debug('READ FROM END OF FILE')
-
-    fileOffset = block['offset']+offset
+    fileOffset = block['offset']-block['originalOffset']+offset
 
     dataRange = fileOffset+len(buf)
-    nbdkit.debug('SEEK TO: %s' % fileOffset)
+    nbdkit.debug('READ AT: %s' % fileOffset)
     nbdkit.debug('READ: %s' % len(buf))
 
     if dataRange <= fileOffset+block['length']:
@@ -83,8 +82,11 @@ def pread(h, buf, offset, flags):
     else:
         raise RuntimeError('need data from next block')
 
-    #os.lseek(h['fd'], fileOffset, os.SEEK_SET)
-    n = os.preadv(h['fd'], [buf], fileOffset)
-    nbdkit.debug("readed: %s" % n)
-    if n != len(buf):
-        raise RuntimeError("unexpected short read from file")
+    if block['data'] is False:
+        nbdkit.debug('handle zero')
+        buf = '\0'*len(buf)
+    else:
+        n = os.preadv(h['fd'], [buf], fileOffset)
+        nbdkit.debug("readed: %s" % n)
+        if n != len(buf):
+            raise RuntimeError("unexpected short read from file")

@@ -73,16 +73,22 @@ def pread(h, buf, offset, flags):
         nbdkit.debug('READ FROM END OF FILE')
     fileOffset = block['offset']-block['originalOffset']+offset
 
-    dataRange = fileOffset+len(buf)
+    dataRange  = fileOffset+len(buf)
+    blockRange = fileOffset+block['length']:
+    isData     = block['data']
     nbdkit.debug('READ AT: %s' % fileOffset)
     nbdkit.debug('READ: %s' % len(buf))
 
-    if dataRange <= fileOffset+block['length']:
+    if dataRange <= blockRange:
         nbdkit.debug('can read everything')
     else:
-        raise RuntimeError('need data from next block')
+        # TODO: in case length is requested which requires to
+        # use the next block in the blockmap, partial read data
+        # from this block and handle
+        if isData is True:
+            raise RuntimeError('need data from next block')
 
-    if block['data'] is False:
+    if isData is False:
         nbdkit.debug('handle zero')
         buf = '\0'*len(buf)
     else:

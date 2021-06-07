@@ -60,6 +60,7 @@ def pread(h, buf, offset, flags):
     # return data:
     #    list(filter(lambda x:x["nextBlockOffset"]==133300734,blocks))
     #
+    data = bytearray()
     blockList = list(filter(lambda x:x["originalOffset"]<=offset,map))
     if len(blockList) == 1:
         block = blockList[0]
@@ -74,25 +75,49 @@ def pread(h, buf, offset, flags):
     fileOffset = block['offset']-block['originalOffset']+offset
 
     dataRange  = fileOffset+len(buf)
-    blockRange = fileOffset+block['length']:
+    blockRange = fileOffset+block['length']
     isData     = block['data']
     nbdkit.debug('READ AT: %s' % fileOffset)
     nbdkit.debug('READ: %s' % len(buf))
 
+    if isData is False:
+        nbdkit.debug('handle zero')
+        buf = '\0'*len(buf)
+        return
+
     if dataRange <= blockRange:
         nbdkit.debug('can read everything')
+        data = os.pread(h['fd'], len(buf), fileOffset)
+        nbdkit.debug("readed: %s" % len(data))
     else:
         # TODO: in case length is requested which requires to
         # use the next block in the blockmap, partial read data
         # from this block and handle
-        if isData is True:
-            raise RuntimeError('need data from next block')
+        canRead = len(buf)-block['length']
+        nbdkit.debug('Can read from this block: %s' % canRead)
+        data = os.pread(h['fd'], canRead, fileOffset)
 
-    if isData is False:
-        nbdkit.debug('handle zero')
-        buf = '\0'*len(buf)
-    else:
-        n = os.preadv(h['fd'], [buf], fileOffset)
-        nbdkit.debug("readed: %s" % n)
-        if n != len(buf):
-            raise RuntimeError("unexpected short read from file")
+        nbdkit.debug('did read: %s' % len(buf))
+        leftOver = len(buf)-len(data)
+        nbdkit.debug('still need to read read: %s' % leftOver)
+
+        if isData is True:
+            nextBlock = list(filter(lambda x:x["offset"]==block["nextBlockOffset"],map))[0]
+
+            if nextBlock['data'] is False:
+                data += b'\0'*leftOver
+                nbdkit.debug('next block is zero')
+            else:
+                nbdkit.debug("%s" % nextBlock)
+                nbdkit.debug("read now: %s" % leftOver)
+                fileOffset = nextBlock['offset']
+                nbdkit.debug("read now: %s from offset: %s" % (leftOver, fileOffset))
+                data += os.pread(h['fd'], leftOver, fileOffset)
+                nbdkit.debug('did read: %s' % len(data))
+
+    if len(data) != len(buf):
+        raise RuntimeError("unexpected short read from file")
+
+    buf[:] = data
+
+

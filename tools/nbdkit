@@ -101,7 +101,7 @@ def pread(h, buf, offset, flags):
         #
         #
         canRead = len(buf)-block['length']
-        if isData is False:
+        if isData is False and canRead > 0:
             nbdkit.debug('handle zero for first part')
             data += b'\0'*len(canRead)
         else:
